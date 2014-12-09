@@ -18,18 +18,6 @@ public enum PlayerActions
 public class PlayerController : MonoBehaviour 
 {
 	/// <summary>
-	/// 2D Box storing the distances (from the player) where the
-	/// environment was detected.
-	/// </summary>
-	private class DetectionBox
-	{
-		public RaycastHit2D? left = null;
-		public RaycastHit2D? right = null;
-		public RaycastHit2D? up = null;
-		public RaycastHit2D? down = null;
-	}
-
-	/// <summary>
 	/// Name of the axis to use for left-right movement
 	/// </summary>
 	public string runInputAxis = "Horizontal";
@@ -60,74 +48,33 @@ public class PlayerController : MonoBehaviour
 	/// </summary>
 	public float jumpGroundThreshold = 0.01f;
 
-	void Update()
-	{
-	}
-
+	/// <summary> Runs after every physics system update </summary>
 	void FixedUpdate()
 	{
-		Vector3 force = Vector3.zero;
+		Vector2 force = Vector2.zero;
+
 		float horz = Input.GetAxis("Horizontal");
 		if(horz != 0 && rigidbody2D.velocity.x < runMaxSpeed)
 			force.x += runSpeedScale*horz;
 
-		float jump = Input.GetAxis("Jump");
-		DetectionBox box = this.detect();
-		if(jump != 0 && box.down != null)
-		{
-			Vector2 ray = (Vector2)transform.position - box.down.Value.point;
-			if(box.down != null && ray.magnitude < jumpGroundThreshold)
-				force.y += jumpScale*jump;
-		}
+		float jump = Input.GetAxis ("Jump");
+		if(jump != 0 && this.canJump())
+			force.y += jumpScale*jump;
 
 		rigidbody2D.AddForce(force);
-
-#if false
-		// draw the detection results
-		if(box.left != null)
-			Debug.DrawLine(transform.position, box.left.Value.point, Color.red);
-		if(box.right != null)
-			Debug.DrawLine(transform.position, box.right.Value.point, Color.red);
-		if(box.up != null)
-			Debug.DrawLine(transform.position, box.up.Value.point, Color.green);
-		if(box.down != null)
-			Debug.DrawLine(transform.position, box.down.Value.point, Color.green);
-#endif
 	}
 
 	/// <summary>
-	/// Detects the distances in each primary direction to the nearest 
-	/// point in the environment
+	/// Determine if the player can jump right now
 	/// </summary>
 	/// <returns>
-	/// The distance from the player to the nearest point in 
-	/// the environment in each direction
+	/// <c>true</c> if the player can jump, <c>false</c> otherwise.
 	/// </returns>
-	/// <remarks>
-	/// TODO: allow the caller to specify different layers
-	/// TODO: allow the user to specify maximum distance on a per-action basis
-	/// </remarks>
-	private DetectionBox detect()
+	private bool canJump()
 	{
-		DetectionBox rval = new DetectionBox();
-		RaycastHit2D result;
+		if(Mathf.Abs(this.rigidbody2D.velocity.y) > jumpGroundThreshold)
+			return false;
 
-		result = Physics2D.Raycast(transform.position, Vector2.right, 3);
-		if(result.collider)
-			rval.right = result;
-
-		result = Physics2D.Raycast(transform.position, -Vector2.right, 3);
-		if(result.collider)
-			rval.left = result;
-
-		result = Physics2D.Raycast(transform.position, Vector2.up, 3);
-		if(result.collider)
-			rval.up = result;
-
-		result = Physics2D.Raycast(transform.position, -Vector2.up, 3);
-		if(result.collider)
-			rval.down = result;
-
-		return rval;
+		return this.GetComponentInChildren<CircleDetector>().Detect();
 	}
 }
