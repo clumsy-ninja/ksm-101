@@ -23,14 +23,9 @@ public class PlayerController : MonoBehaviour
 	public string runInputAxis = "Horizontal";
 
 	/// <summary>
-	/// Scaling factor to apply to the player movement speed
-	/// </summary>
-	public float runSpeedScale = 2.0f;
-
-	/// <summary>
 	/// Upper bound of the speed the player can move
 	/// </summary>
-	public float runMaxSpeed = 3.0f;
+	public float runMaxSpeed = 5.0f;
 
 	/// <summary>
 	/// Name of the axis to use for left-right movement
@@ -49,7 +44,7 @@ public class PlayerController : MonoBehaviour
 	public float jumpGroundThreshold = 0.01f;
 
 	/// <summary> Reference to sibling Rigidbody2D </summary>
-	private Rigidbody2D rigidbody2D;
+	private Rigidbody2D physics;
 
 	/// <summary> Reference to child component that detects if the player can jump </summary>
 	private CircleDetector jumpDetector;
@@ -58,24 +53,19 @@ public class PlayerController : MonoBehaviour
 	void Start()
 	{
 		// load references to commonly-used components
-		this.rigidbody2D = GetComponent<Rigidbody2D>();
+		this.physics = GetComponent<Rigidbody2D>();
 		this.jumpDetector = GetComponentInChildren<CircleDetector>();
 	}
 
 	/// <summary> Runs after every physics system update </summary>
 	void FixedUpdate()
 	{
-		Vector2 force = Vector2.zero;
+		float move = Input.GetAxis(this.runInputAxis);
+		this.physics.velocity = new Vector2(move*runMaxSpeed, this.physics.velocity.y);
 
-		float horz = Input.GetAxis("Horizontal");
-		if(horz != 0 && this.rigidbody2D.velocity.x < runMaxSpeed)
-			force.x += runSpeedScale*horz;
-
-		float jump = Input.GetAxis ("Jump");
+		float jump = Input.GetAxis(this.jumpInputAxis);
 		if(jump != 0 && this.canJump())
-			force.y += jumpScale*jump;
-
-		this.rigidbody2D.AddForce(force);
+			this.physics.AddForce(new Vector2(0, jumpScale*jump));
 	}
 
 	/// <summary>
@@ -86,7 +76,7 @@ public class PlayerController : MonoBehaviour
 	/// </returns>
 	private bool canJump()
 	{
-		if(Mathf.Abs(this.rigidbody2D.velocity.y) > jumpGroundThreshold)
+		if(Mathf.Abs(this.physics.velocity.y) > jumpGroundThreshold)
 			return false;
 
 		return this.jumpDetector.Detect();
