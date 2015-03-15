@@ -18,6 +18,20 @@ public class CameraController : MonoBehaviour
 	public GameObject target;
 
 	/// <summary>
+	/// Reference to required sibling camera component
+	/// </summary>
+	private Camera camera;
+
+	/// <summary>
+	/// Start running this component
+	/// </summary>
+	void Start()
+	{
+		// load references to common components
+		this.camera = this.GetComponent<Camera>();
+	}
+
+	/// <summary>
 	/// 	Performs a check after each render to force the camera to only 
 	/// 	render what's currently in the scene.
 	/// </summary>
