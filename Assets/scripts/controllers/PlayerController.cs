@@ -48,20 +48,34 @@ public class PlayerController : MonoBehaviour
 	/// </summary>
 	public float jumpGroundThreshold = 0.01f;
 
+	/// <summary> Reference to sibling Rigidbody2D </summary>
+	private Rigidbody2D rigidbody2D;
+
+	/// <summary> Reference to child component that detects if the player can jump </summary>
+	private CircleDetector jumpDetector;
+
+	/// <summary> Start using the component </summary>
+	void Start()
+	{
+		// load references to commonly-used components
+		this.rigidbody2D = GetComponent<Rigidbody2D>();
+		this.jumpDetector = GetComponentInChildren<CircleDetector>();
+	}
+
 	/// <summary> Runs after every physics system update </summary>
 	void FixedUpdate()
 	{
 		Vector2 force = Vector2.zero;
 
 		float horz = Input.GetAxis("Horizontal");
-		if(horz != 0 && rigidbody2D.velocity.x < runMaxSpeed)
+		if(horz != 0 && this.rigidbody2D.velocity.x < runMaxSpeed)
 			force.x += runSpeedScale*horz;
 
 		float jump = Input.GetAxis ("Jump");
 		if(jump != 0 && this.canJump())
 			force.y += jumpScale*jump;
 
-		rigidbody2D.AddForce(force);
+		this.rigidbody2D.AddForce(force);
 	}
 
 	/// <summary>
@@ -75,6 +89,6 @@ public class PlayerController : MonoBehaviour
 		if(Mathf.Abs(this.rigidbody2D.velocity.y) > jumpGroundThreshold)
 			return false;
 
-		return this.GetComponentInChildren<CircleDetector>().Detect();
+		return this.jumpDetector.Detect();
 	}
 }
