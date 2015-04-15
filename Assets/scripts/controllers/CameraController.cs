@@ -1,115 +1,52 @@
 ﻿using UnityEngine;
 using System.Collections;
 
-/// <summary>
-/// Controller script that defines how the camera moves in response
-/// to the player's movement.
-/// </summary>
 public class CameraController : MonoBehaviour 
 {
-	/// <summary>
-	/// GameObject that the camera must stay within the bounds of.
-	/// </summary>
-	public GameObject world;
+    public GameObject world;
+    public GameObject follow;
 
-	/// <summary>
-	/// GameObject that the camera should follow (typically the player)
-	/// </summary>
-	public GameObject target;
+    private Camera _camera;
+    private Transform _transform;
+    private SpriteRenderer _followSprite;
+    private SpriteRenderer _worldSprite;
 
-	/// <summary>
-	/// Reference to required sibling camera component
-	/// </summary>
-	private Camera camera;
+    void Start()
+    {
+        _camera = GetComponent<Camera>();
+        _transform = GetComponent<Transform>();
 
-	/// <summary>
-	/// Start running this component
-	/// </summary>
-	void Start()
-	{
-		// load references to common components
-		this.camera = this.GetComponent<Camera>();
-	}
+        _followSprite = follow.GetComponent<SpriteRenderer>();
+        _worldSprite = world.GetComponent<SpriteRenderer>();
+    }
 
-	/// <summary>
-	/// 	Performs a check after each render to force the camera to only 
-	/// 	render what's currently in the scene.
-	/// </summary>
-	/// <remarks>
-	/// 	This can be optimized for cases when we know that the player's
-	///		position has changed. It's unnecessary otherwise.
-	/// </remarks>
-	void Update()
-	{
-		Bounds camBounds = getTargetedCameraBounds();
-		Bounds worldBounds = getWorldBounds();
-		Vector3 adjusted = new Vector3();
+    void Update()
+    {
+        Bounds camBounds = GetFollowBounds();
+        Bounds worldBounds = _worldSprite.bounds;
+        Vector3 adjusted = camBounds.center;
 
-		// force the camera's x coord to fit into the current scene
-		if(camBounds.min.x < worldBounds.min.x)
-			adjusted.x = worldBounds.min.x + camBounds.extents.x;
-		else if(camBounds.max.x > worldBounds.max.x)
-			adjusted.x = worldBounds.max.x - camBounds.extents.x;
-		else
-			adjusted.x = target.transform.position.x;
+        // force the _camera's x coord to fit into the current scene
+        if(camBounds.min.x < worldBounds.min.x)
+            adjusted.x += (worldBounds.min.x - camBounds.min.x);
+        else if(camBounds.max.x > worldBounds.max.x)
+            adjusted.x -= (camBounds.max.x - worldBounds.max.x);
 
-		// force the camera's y coord to fit into the current scene
-		if(camBounds.min.y < worldBounds.min.y)
-			adjusted.y = worldBounds.min.y + camBounds.extents.y;
-		else if(camBounds.max.y > worldBounds.max.y)
-			adjusted.y = worldBounds.max.y - camBounds.extents.y;
-		else
-			adjusted.y = target.transform.position.y;
+        // force the _camera's y coord to fit into the current scene
+        if(camBounds.min.y < worldBounds.min.y)
+            adjusted.y += (worldBounds.min.y - camBounds.min.y);
+        else if(camBounds.max.y > worldBounds.max.y)
+            adjusted.y -= (camBounds.max.y - worldBounds.max.y);
 
-		adjusted.z = transform.position.z;
-		transform.position = adjusted;
-	}
+        adjusted.z = _transform.position.z;
+        transform.position = adjusted;
+    }
 
-	/// <summary>
-	/// Retrieve the axis-aligned bounding box for what the camera can 
-	/// currently see.
-	/// </summary>
-	/// <remarks>
-	/// 	For in-game calls, the current transform's position is considered
-	///  	to be the center point for the bounds.
-	/// </remarks>
-	protected Bounds getCameraBounds()
-	{
-		return new Bounds(transform.position, getCameraExtents());
-	}
-
-	/// <summary>
-	/// 	Calculate the worldspace extents (width, height) of the sibling camera.
-	/// </summary>
-	/// <returns>
-	/// 	The width and height of the camera's viewing area, as a Vector2
-	/// </returns>
-	protected Vector2 getCameraExtents()
-	{
-		float size = 2*this.camera.orthographicSize;
-		float ratio = (float)Screen.width/Screen.height;
-		return new Vector2(size*ratio, size);
-	}
-
-	/// <summary>
-	/// Retrieve the axis-aligned bounding box for what the camera would see if it
-	/// were centered on it's target object.
-	/// </summary>
-	/// <remarks>
-	/// 	For in-game calls, the current transform's position is considered
-	///  	to be the center point for the bounds.
-	/// </remarks>
-	protected Bounds getTargetedCameraBounds()
-	{
-		return new Bounds(target.transform.position, getCameraExtents());
-	}
-
-	/// <summary>
-	/// Return the full world-space bounds for the current level
-	/// </summary>
-	/// <returns>The world bounds.</returns>
-	protected Bounds getWorldBounds()
-	{
-		return this.world.GetComponent<SpriteRenderer>().sprite.bounds;
-	}
+    private Bounds GetFollowBounds()
+    {
+        float size1D = 2 * _camera.orthographicSize;
+        float ratio = (float) Screen.width / Screen.height;
+        Vector2 size = new Vector2(size1D*ratio, size1D);
+        return new Bounds(_followSprite.bounds.center, size);
+    }
 }

@@ -1,84 +1,136 @@
-﻿using UnityEngine;
+﻿using System;
 using System.Collections;
+using UnityEngine;
 
-/// <summary>
-/// Set of bit flags indicating the actions that either can be
-/// performed by the player or are being performed.
-/// </summary>
-public enum PlayerActions
-{
-	None = 0x00000000,
-	Jump = 0x00000001,
-	Run  = 0x00000002
-}
-
-/// <summary>
-/// Main controller script that defines the behavior of the player object.
-/// </summary>
 public class PlayerController : MonoBehaviour 
 {
-	/// <summary>
-	/// Name of the axis to use for left-right movement
-	/// </summary>
-	public string runInputAxis = "Horizontal";
+    public static readonly float Epsilon = 0.001f;
 
-	/// <summary>
-	/// Upper bound of the speed the player can move
-	/// </summary>
-	public float runMaxSpeed = 5.0f;
+    public float maxSpeed = 5.0f;
 
-	/// <summary>
-	/// Name of the axis to use for left-right movement
-	/// </summary>
-	public string jumpInputAxis = "Jump";
+    public float jumpScale = 25.0f;
+    public float jumpWaitTime = 0.25f;
 
-	/// <summary>
-	/// Scaling factor to apply to the jump force
-	/// </summary>
-	public float jumpScale = 25.0f;
+    public float groundThreshold = 0.03f;
+    public LayerMask groundLayer;
+    public ToolType tool = ToolType.Ingot;
 
-	/// <summary>
-	/// Distance above the nearest ground layer point that determines
-	/// whether a jump is performed or not.
-	/// </summary>
-	public float jumpGroundThreshold = 0.01f;
+    private class Detector
+    {
+        public Vector2 min;
+        public Vector2 max;
+        public Collider2D hit;
+    }
 
-	/// <summary> Reference to sibling Rigidbody2D </summary>
-	private Rigidbody2D physics;
+    private class Inputs
+    {
+        public float run;
+        public bool jump;
 
-	/// <summary> Reference to child component that detects if the player can jump </summary>
-	private CircleDetector jumpDetector;
+        public void Reset()
+        {
+            run = 0;
+            jump = false;
+        }
 
-	/// <summary> Start using the component </summary>
-	void Start()
-	{
-		// load references to commonly-used components
-		this.physics = GetComponent<Rigidbody2D>();
-		this.jumpDetector = GetComponentInChildren<CircleDetector>();
-	}
+        public override string ToString()
+        {
+            return string.Format("run:{0}, jump:{1}", run, jump);
+        }
+    }
 
-	/// <summary> Runs after every physics system update </summary>
-	void FixedUpdate()
-	{
-		float move = Input.GetAxis(this.runInputAxis);
-		this.physics.velocity = new Vector2(move*runMaxSpeed, this.physics.velocity.y);
+    private Rigidbody2D _rigidBody;
+    private BoxCollider2D _boxCollider;
+    private Detector _ground;
+    private Inputs _inputs;
+    private UseContext _useContext;
 
-		float jump = Input.GetAxis(this.jumpInputAxis);
-		if(jump != 0 && this.canJump())
-			this.physics.AddForce(new Vector2(0, jumpScale*jump));
-	}
+    void Awake()
+    {
+        _inputs = new Inputs();
+        _ground = new Detector();
 
-	/// <summary>
-	/// Determine if the player can jump right now
-	/// </summary>
-	/// <returns>
-	/// <c>true</c> if the player can jump, <c>false</c> otherwise.
-	/// </returns>
-	private bool canJump()
-	{
-		if(Mathf.Abs(this.physics.velocity.y) > jumpGroundThreshold)
-			return false;
+        _rigidBody = GetComponent<Rigidbody2D>();
+        _boxCollider = GetComponent<BoxCollider2D>();
+    }
 
-		return this.jumpDetector.Detect();
-	}
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        UseContext usable = other.gameObject.GetComponent<UseContext>();
+        if(usable != null)
+            _useContext = usable;
+    }
+
+    void OnTriggerExit2D(Collider2D other)
+    {
+        UseContext usable = other.gameObject.GetComponent<UseContext>();
+        if(usable != null)
+            _useContext = null;
+    }
+
+    void Update()
+    {
+        if(Input.GetAxis("Use") > 0 )
+        {
+            if(_useContext)
+                _useContext.Use(this);
+            else
+            {
+                //TODO: use the current tool
+            }
+
+            return;
+        }
+
+        _inputs.run = Input.GetAxis("Horizontal");
+        _inputs.jump = Input.GetAxis("Jump") > 0;
+    }
+
+    void FixedUpdate()
+    {
+        Vector2 min = _boxCollider.bounds.min;
+        Vector2 max = _boxCollider.bounds.max;
+
+        _ground.min = new Vector2(min.x, min.y - groundThreshold);
+        _ground.max = new Vector2(max.x, min.y);
+
+        _ground.hit = Physics2D.OverlapArea(_ground.min,
+            _ground.max, groundLayer);
+
+        if(Math.Abs(_inputs.run) > Epsilon)
+        {
+            _rigidBody.velocity = new Vector2(_inputs.run * maxSpeed,
+                _rigidBody.velocity.y);
+        }
+
+        if(_inputs.jump && canJump())
+            _rigidBody.AddForce(new Vector2(0, jumpScale));
+
+        _inputs.Reset();
+    }
+
+    private bool canJump()
+    {
+        return Math.Abs(_rigidBody.velocity.y) < Epsilon && 
+            _ground.hit != null;
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        if(_ground != null)
+            DrawDetector(_ground);
+    }
+
+    private static readonly Color Active = new Color(1f, 1f, 0f, 0.2f);
+    private static readonly Color Inactive = new Color(0.7f, 0.8f, 0.9f, 0.2f);
+    private void DrawDetector(Detector bounds)
+    {
+        GL.Begin(GL.QUADS);
+        GL.Color(bounds.hit ? Active : Inactive);
+        GL.Vertex3(bounds.min.x, bounds.min.y, 0);
+        GL.Vertex3(bounds.max.x, bounds.min.y, 0);
+        GL.Vertex3(bounds.max.x, bounds.max.y, 0);
+        GL.Vertex3(bounds.min.x, bounds.max.y, 0);
+        GL.End();
+    }
 }
