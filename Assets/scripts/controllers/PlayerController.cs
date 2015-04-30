@@ -6,21 +6,10 @@ public class PlayerController : MonoBehaviour
 {
     public static readonly float Epsilon = 0.001f;
 
-    public float maxSpeed = 5.0f;
-
-    public float jumpScale = 25.0f;
-    public float jumpWaitTime = 0.25f;
-
-    public float groundThreshold = 0.03f;
-    public LayerMask groundLayer;
     public ToolType tool = ToolType.Ingot;
+    public ControllerSettings settings;
 
-    private class Detector
-    {
-        public Vector2 min;
-        public Vector2 max;
-        public Collider2D hit;
-    }
+    public ControllerState state {get; private set;}
 
     private class Inputs
     {
@@ -41,14 +30,13 @@ public class PlayerController : MonoBehaviour
 
     private Rigidbody2D _rigidBody;
     private BoxCollider2D _boxCollider;
-    private Detector _ground;
     private Inputs _inputs;
     private UseContext _useContext;
 
     void Awake()
     {
+        state = new ControllerState();
         _inputs = new Inputs();
-        _ground = new Detector();
 
         _rigidBody = GetComponent<Rigidbody2D>();
         _boxCollider = GetComponent<BoxCollider2D>();
@@ -86,51 +74,112 @@ public class PlayerController : MonoBehaviour
         _inputs.jump = Input.GetAxis("Jump") > 0;
     }
 
-    void FixedUpdate()
+    void LateUpdate()
     {
-        Vector2 min = _boxCollider.bounds.min;
-        Vector2 max = _boxCollider.bounds.max;
+        UpdateControllerState();
 
-        _ground.min = new Vector2(min.x, min.y - groundThreshold);
-        _ground.max = new Vector2(max.x, min.y);
-
-        _ground.hit = Physics2D.OverlapArea(_ground.min,
-            _ground.max, groundLayer);
-
-        if(Math.Abs(_inputs.run) > Epsilon)
+        if(_inputs.jump && CanJump())
         {
-            _rigidBody.velocity = new Vector2(_inputs.run * maxSpeed,
-                _rigidBody.velocity.y);
+            _rigidBody.AddForce(new Vector2(0, settings.jumpScale));
+            state.JumpCooldown = settings.jumpWaitTime;
         }
 
-        if(_inputs.jump && canJump())
-            _rigidBody.AddForce(new Vector2(0, jumpScale));
+        if(Math.Abs(_inputs.run) > Epsilon && 
+            ((_inputs.run < 0 && !state.IsCollidingLeft) ||
+            (_inputs.run > 0 && !state.IsCollidingRight)))
+        {
+            float scale = state.IsCollidingBelow ?
+                settings.maxSpeed :
+                settings.maxSpeedAir;
+
+            _rigidBody.velocity = new Vector2(_inputs.run * scale,
+                _rigidBody.velocity.y);
+        }
 
         _inputs.Reset();
     }
 
-    private bool canJump()
+    private bool CanJump()
     {
-        return Math.Abs(_rigidBody.velocity.y) < Epsilon && 
-            _ground.hit != null;
+        return state.IsCollidingBelow &&
+            state.JumpCooldown <= 0 &&
+            Mathf.Abs(_rigidBody.velocity.y) < Epsilon;
+    }
+
+    private void UpdateControllerState()
+    {
+        float distance;
+        Vector2 center = _boxCollider.bounds.center;
+        Vector2 size = _boxCollider.bounds.size;
+        size.x -= settings.skinWidth;
+        size.y -= settings.skinWidth;
+
+        if(state.JumpCooldown > 0)
+        {
+            state.JumpCooldown -= Time.deltaTime;
+            if(state.JumpCooldown < 0)
+                state.JumpCooldown = 0;
+        }
+
+        state.LeftHit = Physics2D.BoxCast(center, size,
+            0f, -Vector2.right, settings.ground);
+        if(state.LeftHit.collider != null)
+        {
+            distance = (center - state.LeftHit.centroid).sqrMagnitude;
+            state.IsCollidingLeft = distance < settings.skinWidth;
+        }
+        else
+            state.IsCollidingLeft = false;
+
+        state.RightHit = Physics2D.BoxCast(center, size, 
+            0f, Vector2.right, settings.ground);
+        if(state.RightHit.collider != null)
+        {
+            distance = (center - state.RightHit.centroid).sqrMagnitude;
+            state.IsCollidingRight = distance < settings.skinWidth;
+        }
+        else
+            state.IsCollidingRight = false;
+
+        state.AboveHit = Physics2D.BoxCast(center, size,
+            0f, Vector2.up, settings.ground);
+        if(state.AboveHit.collider != null)
+        {
+            distance = (center - state.AboveHit.centroid).sqrMagnitude;
+            state.IsCollidingAbove = distance < settings.skinWidth;
+        }
+        else
+            state.IsCollidingAbove = false;
+
+        bool previous = state.IsCollidingBelow;
+        state.BelowHit = Physics2D.BoxCast(center, size, 
+            0f, -Vector2.up, settings.ground);
+        if(state.BelowHit.collider != null)
+        {
+            distance = (center - state.BelowHit.centroid).sqrMagnitude;
+            state.IsCollidingBelow = distance < settings.skinWidth;
+        }
+        else
+            state.IsCollidingBelow = false;
+        if(!previous && state.IsCollidingBelow)
+            state.JumpCooldown = settings.jumpWaitTime;
     }
 
     void OnDrawGizmosSelected()
     {
-        if(_ground != null)
-            DrawDetector(_ground);
-    }
+        if(state == null)
+            return;
 
-    private static readonly Color Active = new Color(1f, 1f, 0f, 0.2f);
-    private static readonly Color Inactive = new Color(0.7f, 0.8f, 0.9f, 0.2f);
-    private void DrawDetector(Detector bounds)
-    {
-        GL.Begin(GL.QUADS);
-        GL.Color(bounds.hit ? Active : Inactive);
-        GL.Vertex3(bounds.min.x, bounds.min.y, 0);
-        GL.Vertex3(bounds.max.x, bounds.min.y, 0);
-        GL.Vertex3(bounds.max.x, bounds.max.y, 0);
-        GL.Vertex3(bounds.min.x, bounds.max.y, 0);
-        GL.End();
+        Gizmos.color = state.IsCollidingLeft ? Color.red : Color.cyan;
+        Gizmos.DrawSphere(state.LeftHit.point, 0.1f);
+
+        Gizmos.color = state.IsCollidingRight ? Color.red : Color.cyan;
+        Gizmos.DrawSphere(state.RightHit.point, 0.1f);
+
+        Gizmos.color = state.IsCollidingAbove ? Color.red : Color.cyan;
+        Gizmos.DrawSphere(state.AboveHit.point, 0.1f);
+
+        Gizmos.color = state.IsCollidingBelow ? Color.red : Color.cyan;
+        Gizmos.DrawSphere(state.BelowHit.point, 0.1f);
     }
 }
